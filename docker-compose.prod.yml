@@ -1,0 +1,134 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: hisabi-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=${APP_URL:-http://localhost:8080}
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=hisabi
+      - DB_USERNAME=hisabi
+      - DB_PASSWORD=${DB_PASSWORD:-hisabi}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CACHE_DRIVER=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_DRIVER=redis
+    volumes:
+      - ./storage:/var/www/html/storage
+      - ./bootstrap/cache:/var/www/html/bootstrap/cache
+    networks:
+      - hisabi-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  mysql:
+    image: mysql:8.0
+    container_name: hisabi-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: hisabi
+      MYSQL_USER: hisabi
+      MYSQL_PASSWORD: ${DB_PASSWORD:-hisabi}
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'no'
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - hisabi-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: hisabi-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - hisabi-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  scheduler:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: hisabi-scheduler
+    restart: unless-stopped
+    command: ["php", "artisan", "schedule:work"]
+    environment:
+      - APP_ENV=production
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_DATABASE=hisabi
+      - DB_USERNAME=hisabi
+      - DB_PASSWORD=${DB_PASSWORD:-hisabi}
+      - REDIS_HOST=redis
+    networks:
+      - hisabi-network
+    depends_on:
+      - mysql
+      - redis
+    profiles:
+      - scheduler
+
+  queue:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: hisabi-queue
+    restart: unless-stopped
+    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3"]
+    environment:
+      - APP_ENV=production
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_DATABASE=hisabi
+      - DB_USERNAME=hisabi
+      - DB_PASSWORD=${DB_PASSWORD:-hisabi}
+      - REDIS_HOST=redis
+    networks:
+      - hisabi-network
+    depends_on:
+      - mysql
+      - redis
+    profiles:
+      - queue
+
+networks:
+  hisabi-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local
+  redis-data:
+    driver: local

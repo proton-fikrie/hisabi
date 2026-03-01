@@ -22,6 +22,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/brands', [BrandController::class, 'index'])->name('brands');
     Route::get('/categories', [CategoryController::class, 'index'])->name('categories');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
+    Route::get('/admin', function () {
+        return inertia('Admin/Dashboard');
+    })->name('admin.dashboard')->middleware('admin');
     Route::get('/report', function (Request $request) {
         $start_date = $request->query('start_date');
         $end_date = $request->query('end_date');
