@@ -1,0 +1,46 @@
+[Unit]
+Description=Hisabi Laravel Scheduler
+After=network.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/hisabi
+ExecStart=/usr/bin/php /var/www/hisabi/artisan schedule:run
+
+# Resource limits
+LimitAS=128M
+LimitRSS=128M
+LimitNOFILE=512
+LimitNPROC=20
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/hisabi/storage /var/www/hisabi/bootstrap/cache /var/lib/sqlite /var/log/hisabi /tmp
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+RestrictNamespaces=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RemoveIPC=true
+
+# Environment
+Environment="HOME=/var/www"
+Environment="PHP_MEMORY_LIMIT=128M"
+Environment="APP_ENV=production"
+
+StandardOutput=append:/var/log/hisabi/scheduler.log
+StandardError=append:/var/log/hisabi/scheduler-error.log
+SyslogIdentifier=hisabi-scheduler

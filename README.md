@@ -1,117 +1,297 @@
-<h1 align="center">
-<img width="300" src="./public/images/logo.svg" />    
-</h1>
+# Hisabi Ultra-Lightweight LXC Deployment
 
-<p align="center">
-  <b>Hisabi is a simple yet powerful, self-hosted personal finance tracking web app with the ability to parse SMS transactions, generate very useful insights about your money, and power AI!</b>
-</p>
+A production-ready, ultra-lightweight deployment solution for Laravel + React applications on Proxmox using LXC containers.
 
-<p align="center"><a href="https://www.youtube.com/watch?v=kfwcMdlFn9o&list=PLw5MK6ws-o1_rNobmZCmnH5G11vwCiKKk&ab_channel=ILoveMathAcademy" target="__blank"><img src="https://raw.githubusercontent.com/hisabi-app/hisabi/refs/heads/main/public/images/showcase.png" /></a></p>
+## 🎯 Design Goals
 
-## 💰 Sponsors
-Support this project by becoming a sponsor ❤️. Your logo will show up here with a link to your website. [Become a sponsor](https://github.com/sponsors/saleem-hadad)
+- **Memory Usage**: <512MB RAM total
+- **Disk Usage**: <5GB total
+- **Technology Stack**: LXC (not Docker), SQLite (not MySQL), Nginx + PHP-FPM
+- **Target**: Single-container deployment for small-to-medium applications
 
-Follow me on [LinkedIn](https://www.linkedin.com/in/saleem-hadad/) for updates and latest news.
+## 📁 Directory Structure
 
-## 🛠 Features
-
-- [x] 🔐 Self-hosted — Full control over your data
-- [x] 📩 SMS Parser — Auto-detect bank transactions
-- [x] 📊 Reports & Visualization — Clear finance insights
-- [x] 🤖 HisabAI — AI-powered finance assistance
-- [ ] Multiple Accounts (Coming Soon)
-- [ ] API Support (Coming Soon)
-- [x] 🆓 MIT Licensed — Fully open-source
-
-
-## 🎮 Demo
-
-Try the app with [live demo](https://hisabi.on-forge.com/).
-
-## ▶️ Installation 
-
-> Docker Installation
-
-1. Method one (recommended)
-   
-```bash
-git clone https://github.com/hisabi-app/hisabi && cd hisabi
-
-make build # build the docker image
-make run # the same as docker-compose up -d
-
-# wait for a few seconds to allow the DB to finish the setup then run
-make install # only for the first time
+```
+hisabi-lxc-deploy/
+├── scripts/
+│   ├── proxmox-create-lxc.sh    # Run on Proxmox host
+│   └── guest-setup.sh           # Run inside LXC container
+├── configs/
+│   ├── php-fpm-pool.conf        # PHP-FPM optimized for low memory
+│   ├── php-optimizations.ini    # PHP settings for 512MB system
+│   ├── nginx-hisabi.conf        # Nginx Laravel config
+│   └── sqlite-optimizations.conf # SQLite performance tuning
+├── systemd/
+│   ├── hisabi-queue.service     # Queue worker service
+│   ├── hisabi-scheduler.service # Scheduler service
+│   └── hisabi-scheduler.timer   # Scheduler timer (runs every minute)
+└── README.md
 ```
 
-<details>
-<summary>2. Method two (using docker-compose public hosted docker image)</summary>
+## 🚀 Quick Start
 
-First, create a `docker-compose.yml` file
-```yml
-version: '3'
-services:
-    app:
-        image: 'salee2m1/hisabi:2.0.1'
-        ports:
-            - "80:80"
-        networks:
-            - hisabi
-        depends_on:
-            - mysql
-        environment:
-            OPENAI_API_KEY: 'YOUR_OPENAI_API_KEY'
-    mysql:
-        image: 'mysql/mysql-server:8.0'
-        ports:
-            - '3306:3306'
-        environment:
-            MYSQL_ROOT_PASSWORD: 'root'
-            MYSQL_ROOT_HOST: "%"
-            MYSQL_DATABASE: 'hisabi'
-            MYSQL_USER: 'hisabi'
-            MYSQL_PASSWORD: 'hisabi'
-            MYSQL_ALLOW_EMPTY_PASSWORD: 1
-        volumes:
-            - 'hisabimysql:/var/lib/mysql'
-        networks:
-            - hisabi
-        healthcheck:
-            test: ["CMD", "mysqladmin", "ping", "-proot"]
-            retries: 3
-            timeout: 5s
-networks:
-    hisabi:
-        driver: bridge
-volumes:
-    hisabimysql:
-        driver: local
-```
-
-Then, inside the same directory run
+### Step 1: Create the LXC Container (on Proxmox Host)
 
 ```bash
-docker-compose up -d
-# wait for a few seconds to run the DB then run
-docker-compose run app php artisan migrate
-docker-compose run app php artisan hisabi:install
+# Clone this repository
+git clone <repo-url>
+cd hisabi-lxc-deploy
+
+# Make scripts executable
+chmod +x scripts/*.sh
+
+# Create the container (customize as needed)
+CT_ID=100 CT_HOSTNAME=hisabi CT_IP=dhcp ./scripts/proxmox-create-lxc.sh
+
+# Or with static IP:
+CT_ID=100 CT_HOSTNAME=hisabi CT_IP=192.168.1.100/24 CT_GATEWAY=192.168.1.1 ./scripts/proxmox-create-lxc.sh
 ```
 
-</details>
+**Environment Variables:**
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CT_ID` | 100 | Container ID |
+| `CT_HOSTNAME` | hisabi | Container hostname |
+| `CT_IP` | dhcp | IP address (dhcp or static like 192.168.1.100/24) |
+| `CT_GATEWAY` | - | Gateway for static IP |
+| `CT_STORAGE` | local-lvm | Storage pool |
+| `CT_DISK_SIZE` | 5 | Disk size in GB |
+| `CT_MEMORY` | 512 | Memory in MB |
+| `CT_CORES` | 2 | CPU cores |
 
-Once done, visit the app on `http://localhost`
+### Step 2: Deploy Your Application
 
-## JetBrains Sponsorship
-Thank you, JetBrains for sponsoring the license ❤️
+```bash
+# Option A: Copy local files
+pct push 100 /path/to/your/hisabi /var/www/hisabi
 
-<a href="https://www.jetbrains.com/community/opensource/#support" target="__blank">
-<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png?_gl=1*18f1z4q*_ga*MTI4MDYwODYzNy4xNjUyMzU3ODM3*_ga_9J976DJZ68*MTY2MTg3NDM2NC4xMi4xLjE2NjE4NzUxNTAuMC4wLjA.&_ga=2.85008921.1685901777.1661797034-1280608637.1652357837" width="250px" />
-</a>
+# Option B: Clone from GitHub
+git clone https://github.com/yourusername/hisabi.git
+pct push 100 ./hisabi /var/www/hisabi
 
-## Get $200 DigitalOcean Credit
+# Or clone directly inside container
+pct exec 100 -- git clone https://github.com/yourusername/hisabi.git /tmp/hisabi
+pct exec 100 -- cp -r /tmp/hisabi/* /var/www/hisabi/
+```
 
-[![DigitalOcean Referral Badge](https://web-platforms.sfo2.cdn.digitaloceanspaces.com/WWW/Badge%201.svg)](https://www.digitalocean.com/?refcode=64aee93d49da&utm_campaign=Referral_Invite&utm_medium=Referral_Program&utm_source=badge)
+### Step 3: Run Setup Inside Container
 
-## 🔖 License
+```bash
+# Enter container
+pct enter 100
 
-This project is licensed under the MIT License - see the [LICENSE.md](https://github.com/hisabi-app/hisabi/blob/main/LICENSE) file for details.
+# Run setup script
+cd /var/www/hisabi
+bash scripts/guest-setup.sh
+```
+
+Or run directly:
+```bash
+pct exec 100 -- bash /var/www/hisabi/scripts/guest-setup.sh
+```
+
+## 🔧 Manual Configuration
+
+### Laravel `.env` Configuration
+
+The setup script automatically configures for SQLite. Key settings:
+
+```env
+APP_NAME=Hisabi
+APP_ENV=production
+APP_DEBUG=false
+
+DB_CONNECTION=sqlite
+DB_DATABASE=/var/lib/sqlite/hisabi.sqlite
+
+CACHE_DRIVER=file
+QUEUE_CONNECTION=database
+SESSION_DRIVER=file
+
+# Reduce logging verbosity
+LOG_LEVEL=warning
+```
+
+### Database Configuration (`config/database.php`)
+
+Add SQLite optimizations to your database config:
+
+```php
+'sqlite' => [
+    'driver' => 'sqlite',
+    'url' => env('DATABASE_URL'),
+    'database' => env('DB_DATABASE', database_path('database.sqlite')),
+    'prefix' => '',
+    'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
+    'busy_timeout' => 5000,
+    'journal_mode' => 'WAL',
+    'synchronous' => 'NORMAL',
+],
+```
+
+## 📊 Resource Monitoring
+
+```bash
+# Check memory usage
+pct exec 100 -- free -h
+
+# Check disk usage
+pct exec 100 -- df -h
+pct exec 100 -- du -sh /var/www/hisabi
+
+# Check service status
+pct exec 100 -- systemctl status nginx php8.2-fpm hisabi-queue
+
+# View logs
+pct exec 100 -- journalctl -u hisabi-queue -f
+pct exec 100 -- tail -f /var/log/hisabi/*.log
+```
+
+## 🔒 Security Hardening
+
+This deployment includes multiple security measures:
+
+1. **Unprivileged LXC container** - Root in container is not root on host
+2. **AppArmor profile** - Mandatory access control
+3. **Device restrictions** - Limited device access via cgroup
+4. **PHP hardening** - Disabled dangerous functions
+5. **Nginx security headers** - X-Frame-Options, CSP, etc.
+6. **Rate limiting** - Built-in protection against abuse
+7. **Systemd hardening** - Service isolation and resource limits
+
+### Additional Security Recommendations
+
+```bash
+# Set up firewall (inside container)
+apt-get install -y ufw
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw enable
+
+# Set up fail2ban (if needed)
+apt-get install -y fail2ban
+```
+
+## 📦 Backup Strategy
+
+### Automated Backup Script
+
+```bash
+#!/bin/bash
+# /usr/local/bin/backup-hisabi.sh
+
+BACKUP_DIR="/backup/hisabi"
+DATE=$(date +%Y%m%d_%H%M%S)
+mkdir -p "$BACKUP_DIR"
+
+# Checkpoint and backup database
+sqlite3 /var/lib/sqlite/hisabi.sqlite ".backup '${BACKUP_DIR}/hisabi_${DATE}.sqlite'"
+
+# Backup application files
+tar czf "${BACKUP_DIR}/hisabi_app_${DATE}.tar.gz" -C /var/www hisabi
+
+# Keep only last 7 backups
+ls -t ${BACKUP_DIR}/hisabi_*.sqlite | tail -n +8 | xargs rm -f
+ls -t ${BACKUP_DIR}/hisabi_app_*.tar.gz | tail -n +8 | xargs rm -f
+```
+
+Add to crontab:
+```
+0 2 * * * /usr/local/bin/backup-hisabi.sh
+```
+
+## 🐛 Troubleshooting
+
+### Check Logs
+
+```bash
+# System logs
+journalctl -xe
+
+# Application logs
+tail -f /var/www/hisabi/storage/logs/laravel.log
+
+# PHP-FPM logs
+tail -f /var/log/hisabi/php-fpm-error.log
+
+# Nginx logs
+tail -f /var/log/nginx/hisabi-error.log
+```
+
+### Common Issues
+
+**Permission Denied on SQLite**
+```bash
+chown www-data:www-data /var/lib/sqlite/hisabi.sqlite
+chmod 664 /var/lib/sqlite/hisabi.sqlite
+```
+
+**Out of Memory**
+- Reduce PHP-FPM `pm.max_children` to 4
+- Reduce `memory_limit` to 96M
+- Disable unnecessary Laravel services
+
+**Slow Performance**
+```bash
+# Optimize SQLite
+sqlite3 /var/lib/sqlite/hisabi.sqlite "PRAGMA optimize;"
+
+# Clear Laravel caches
+sudo -u www-data php artisan optimize:clear
+sudo -u www-data php artisan optimize
+```
+
+## 📈 Scaling Up
+
+If you need more resources:
+
+```bash
+# On Proxmox host - increase resources
+pct set 100 --memory 1024 --swap 1024
+cpct resize 100 rootfs 10G
+
+# Then update PHP-FPM pool
+# Edit /etc/php/8.2/fpm/pool.d/www.conf
+# pm.max_children = 16
+# pm.start_servers = 4
+
+# Restart services
+pct exec 100 -- systemctl restart php8.2-fpm
+```
+
+## 🔄 Updates
+
+### Update Application Code
+
+```bash
+pct exec 100 -- bash -c "
+    cd /var/www/hisabi
+    git pull origin main
+    sudo -u www-data composer install --no-dev --optimize-autoloader
+    sudo -u www-data php artisan migrate --force
+    sudo -u www-data php artisan optimize
+    sudo -u www-data npm ci && npm run build
+    rm -rf node_modules
+"
+```
+
+### Update System Packages
+
+```bash
+pct exec 100 -- bash -c "
+    apt-get update
+    apt-get upgrade -y
+    apt-get autoremove -y
+    apt-get clean
+"
+```
+
+## 📝 License
+
+This deployment solution is provided as-is for your Laravel applications.
+
+## 🤝 Contributing
+
+Feel free to submit issues or PRs to improve this deployment solution.

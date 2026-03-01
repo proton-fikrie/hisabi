@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Hisabi Laravel Scheduler
+Documentation=https://laravel.com/docs/10.x/scheduling
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

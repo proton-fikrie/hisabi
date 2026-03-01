@@ -1,0 +1,59 @@
+[Unit]
+Description=Hisabi Laravel Queue Worker
+After=network.target mysql.service postgresql.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/hisabi
+ExecStart=/usr/bin/php /var/www/hisabi/artisan queue:work --sleep=3 --tries=3 --timeout=60 --memory=128
+ExecStop=/bin/kill -TERM $MAINPID
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart configuration
+Restart=always
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Resource limits (critical for low memory)
+LimitAS=256M
+LimitRSS=256M
+LimitNOFILE=1024
+LimitNPROC=50
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/hisabi/storage /var/www/hisabi/bootstrap/cache /var/lib/sqlite /var/log/hisabi /tmp
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false  # PHP requires this to be false
+RestrictNamespaces=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RemoveIPC=true
+
+# Environment
+Environment="HOME=/var/www"
+Environment="PHP_MEMORY_LIMIT=128M"
+Environment="APP_ENV=production"
+
+# Logging
+StandardOutput=append:/var/log/hisabi/queue-worker.log
+StandardError=append:/var/log/hisabi/queue-worker-error.log
+SyslogIdentifier=hisabi-queue
+
+[Install]
+WantedBy=multi-user.target
